@@ -1011,6 +1011,37 @@ DWORD WINAPI BrokerThreadBusEmulation(LPVOID pVoid)
                                IID_ISimENG, (LPVOID*) &pISimENG);
     if ((S_OK != hResult) || (nullptr == pISimENG))
     {
+        /* The bus simulation server could not be created, which normally means
+        BusEmulation.exe has not been registered as a COM server.
+
+        Returning here hangs the application. By the time this thread runs,
+        PerformAnOperation has already signalled the action event and is sitting
+        in WaitForSingleObject(sg_hNotifyFinish, INFINITE); with no one left to
+        signal it, the caller waits forever. That is a startup deadlock,
+        because CAN_RegisterClient is reached from CMainFrame::IntializeDIL.
+
+        So stay in a loop and answer every request with a failure instead. The
+        simulated bus is unavailable, which surfaces as an ordinary error, and
+        the rest of the application still runs. */
+        sg_acErrStr = _("The bus simulation server could not be created. Register BusEmulation.exe by running it once with /RegServer from an elevated prompt to use the simulated bus.");
+
+        bool bLoopOnNoServer = true;
+        while (bLoopOnNoServer)
+        {
+            WaitForSingleObject(pThreadParam->m_hActionEvent, INFINITE);
+
+            if (EXIT_THREAD == pThreadParam->m_unActionCode)
+            {
+                bLoopOnNoServer = false;
+            }
+            else if (INACTION != pThreadParam->m_unActionCode)
+            {
+                sg_hResult = S_FALSE;
+                SetEvent(sg_hNotifyFinish);
+            }
+        }
+
+        SetEvent(pThreadParam->hGetExitNotifyEvent());
         return 0L;
     }
 

@@ -28,6 +28,7 @@
 #include "MsgFrmtWnd.h"
 #include "Error.h"
 #include "utility\MultiLanguageSupport.h"
+#include <algorithm>
 #include "Resource.h"
 
 // CMsgFrmtWnd
@@ -161,7 +162,7 @@ CMsgFrmtWnd::CMsgFrmtWnd(ETYPE_BUS eBusType, CMsgContainerBase* msgContainer, HW
     }
 
     m_bConnected = FALSE;
-    m_pExpandedMapIndexes = nullptr;
+    m_bSortOrderStale = false;
 
     for(int i=0; i<MAX_MSG_WND_COL_CNT; i++)
     {
@@ -585,6 +586,8 @@ LRESULT CMsgFrmtWnd::vOnGetInterpretState(WPARAM wParam, LPARAM /*lParam*/)
 LRESULT CMsgFrmtWnd::vOnClearSortColumns(WPARAM /*wParam*/, LPARAM /*lParam*/)
 {
     m_lstMsg.m_wndHeader.ClearArrowDirection();
+    m_nField = -1;
+    m_bSortOrderStale = false;
     return 0;
 }
 
@@ -700,9 +703,12 @@ void CMsgFrmtWnd::OnEditClearAll()
     //Remove all the Msg signal tree
     vRemoveAllMsgTree();
     EnterCriticalSection(&m_ouCriticalSection);
+    EnterCriticalSection(&m_omCritSecForMapArr);
     m_omMsgDispMap.RemoveAll();
-    LeaveCriticalSection(&m_ouCriticalSection);
     m_omMgsIndexVec.clear();
+    m_bSortOrderStale = false;
+    LeaveCriticalSection(&m_omCritSecForMapArr);
+    LeaveCriticalSection(&m_ouCriticalSection);
     if(m_pouMsgContainerIntrf != nullptr)
     {
         m_pouMsgContainerIntrf->vEditClearAll();
@@ -1172,6 +1178,13 @@ void CMsgFrmtWnd::OnTimer(UINT nIDEvent)
     {
         if (m_bUpdate == TRUE)
         {
+            /* Message ids that showed up since the last update are sitting at
+            the end of the row order; put them where the sort wants them. */
+            if (m_bSortOrderStale && !IS_MODE_APPEND(m_bExprnFlag_Disp))
+            {
+                vApplyDisplayOrderSort();
+            }
+
             //Get count of list control
             int nBuffMsgCnt = 0;
             //Now for upadating no. of items in list ctrl
@@ -1665,12 +1678,277 @@ LRESULT CMsgFrmtWnd::vUpdateFormattedMsgStruct(WPARAM wParam, LPARAM /*lParam*/)
 }
 
 /*******************************************************************************
+  Function Name  : eGetSortColumn
+  Input(s)       : nField - one based index of the clicked header column
+  Output         : The message window column it refers to
+  Functionality  : Resolves a sort field onto a column identity using the header
+                   layout that is actually in force, so a rearranged or
+                   protocol specific column arrangement still sorts correctly.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+CMsgFrmtWnd::eMsgSortColumn CMsgFrmtWnd::eGetSortColumn(int nField) const
+{
+    /* Column zero of the header is the blank interpretation column, so the
+    field arrives one ahead of the header position it stands for. */
+    const int nPosition = nField - 1;
+
+    if (nPosition < 0)
+    {
+        return SORT_BY_NOTHING;
+    }
+
+    /* Time and message name come from the display map and the database, so
+    they hold for any protocol. */
+    if (nPosition == m_sHdrColStruct.m_byTimePos)
+    {
+        return SORT_BY_TIME;
+    }
+    if (nPosition == m_sHdrColStruct.m_byCodeNamePos)
+    {
+        return SORT_BY_NAME;
+    }
+
+    /* The rest are read straight out of the map index, which is only laid out
+    this way for CAN and J1939. */
+    if ((CAN == m_eBusType) || (J1939 == m_eBusType))
+    {
+        if (nPosition == m_sHdrColStruct.m_byChannel)
+        {
+            return SORT_BY_CHANNEL;
+        }
+
+        /* The identifier the key carries is the message id on CAN, but the PGN
+        on J1939, where the id column shows the full 29 bit identifier and the
+        PGN has a column of its own. Sort whichever column the key can answer
+        for and leave the other alone. */
+        const int nKeyIdPosition = (J1939 == m_eBusType)
+                                   ? m_sHdrColStruct.m_byPGNPos
+                                   : m_sHdrColStruct.m_byIDPos;
+
+        if (nPosition == nKeyIdPosition)
+        {
+            return SORT_BY_ID;
+        }
+    }
+
+    return SORT_BY_NOTHING;
+}
+
+namespace
+{
+    /* One overwrite row, reduced to the value the active column sorts on.
+    Extracting the keys up front keeps the message name lookup to one call per
+    row instead of one per comparison. */
+    struct SMsgSortRow
+    {
+        __int64 m_nMapIndex;
+        __int64 m_nValue;
+        CString m_omText;
+    };
+
+    struct SMsgSortRowLess
+    {
+        bool m_bByText;
+        bool m_bAscending;
+
+        SMsgSortRowLess(bool bByText, bool bAscending)
+            : m_bByText(bByText), m_bAscending(bAscending)
+        {}
+
+        bool operator()(const SMsgSortRow& sLeft, const SMsgSortRow& sRight) const
+        {
+            int nResult;
+
+            if (m_bByText)
+            {
+                nResult = sLeft.m_omText.CompareNoCase(sRight.m_omText);
+            }
+            else
+            {
+                nResult = (sLeft.m_nValue < sRight.m_nValue) ? -1
+                          : ((sLeft.m_nValue > sRight.m_nValue) ? 1 : 0);
+            }
+
+            if (0 == nResult)
+            {
+                /* Rows that tie on the column, a message id seen on two
+                channels for instance, still need a settled order or they
+                would shuffle on every re-sort. */
+                return (sLeft.m_nMapIndex < sRight.m_nMapIndex);
+            }
+
+            return m_bAscending ? (nResult < 0) : (nResult > 0);
+        }
+    };
+}
+
+/*******************************************************************************
+  Function Name  : vSortDisplayOrder
+  Input(s)       : -
+  Output         : -
+  Functionality  : Reorders m_omMgsIndexVec, the row to message mapping the
+                   overwrite modes display from, according to the active sort
+                   field.
+
+                   Sorting the row order rather than the receive buffer is what
+                   lets this run while the bus is connected: the buffer index
+                   held per message stays valid, and the receive thread can keep
+                   writing entries in place underneath.
+
+                   Expansion placeholders are dropped; the caller collapses
+                   before sorting and expands again afterwards.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vSortDisplayOrder()
+{
+    const eMsgSortColumn eColumn = eGetSortColumn(m_nField);
+
+    if ((SORT_BY_NOTHING == eColumn) || (nullptr == m_pouMsgContainerIntrf))
+    {
+        return;
+    }
+
+    EnterCriticalSection(&m_omCritSecForMapArr);
+
+    std::vector<SMsgSortRow> omRows;
+    omRows.reserve(m_omMgsIndexVec.size());
+
+    for (UINT i = 0; i < m_omMgsIndexVec.size(); i++)
+    {
+        const __int64 nMapIndex = m_omMgsIndexVec[i];
+        if (nInvalidKey == nMapIndex)
+        {
+            continue;
+        }
+
+        SMsgSortRow sRow;
+        sRow.m_nMapIndex = nMapIndex;
+        sRow.m_nValue    = 0;
+
+        switch (eColumn)
+        {
+            case SORT_BY_TIME:
+            {
+                SMSGDISPMAPENTRY sDispEntry;
+                if (m_omMsgDispMap.Lookup(nMapIndex, sDispEntry))
+                {
+                    sRow.m_nValue = sDispEntry.m_nTimeStamp;
+                }
+            }
+            break;
+
+            case SORT_BY_CHANNEL:
+                sRow.m_nValue = (nMapIndex >> defBITS_IN_FOUR_BYTE) & 0xFF;
+                break;
+
+            case SORT_BY_ID:
+                /* The map index carries the direction and the frame format
+                alongside the identifier; mask them off so a message sorts by
+                its id whether it was transmitted or received. */
+                sRow.m_nValue = nMapIndex & defSORT_MSG_ID_MASK;
+                break;
+
+            case SORT_BY_NAME:
+            {
+                unsigned int unMsgId = 0;
+                m_pouMsgContainerIntrf->GetMessageDetails(nMapIndex, unMsgId,
+                        sRow.m_omText,
+                        IS_NUM_HEX_SET(m_bExprnFlag_Disp) != 0);
+            }
+            break;
+
+            default:
+                break;
+        }
+
+        omRows.push_back(sRow);
+    }
+
+    std::stable_sort(omRows.begin(), omRows.end(),
+                     SMsgSortRowLess(SORT_BY_NAME == eColumn, m_bAscending));
+
+    m_omMgsIndexVec.clear();
+    for (UINT i = 0; i < omRows.size(); i++)
+    {
+        m_omMgsIndexVec.push_back(omRows[i].m_nMapIndex);
+    }
+
+    LeaveCriticalSection(&m_omCritSecForMapArr);
+}
+
+/*******************************************************************************
+  Function Name  : vApplyDisplayOrderSort
+  Input(s)       : -
+  Output         : -
+  Functionality  : Collapses any expanded message, sorts the row order and then
+                   restores the entries that were expanded. Used both when a
+                   column is clicked and when a message id turns up for the
+                   first time after a sort has been applied.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vApplyDisplayOrderSort()
+{
+    std::vector<__int64> omExpandedMapIndexes;
+
+    if (IS_MODE_INTRP(m_bExprnFlag_Disp))
+    {
+        //Collapse message entries which are expanded.
+        for (UINT i = 0; i < m_omMgsIndexVec.size(); i++)
+        {
+            SMSGDISPMAPENTRY sTemp;
+            __int64 nMapIndex = m_omMgsIndexVec[i];
+            if (nMapIndex != nInvalidKey)
+            {
+                if (m_omMsgDispMap.Lookup(nMapIndex, sTemp))
+                {
+                    if (sTemp.m_eInterpretMode == INTERPRETING)
+                    {
+                        sTemp.m_eInterpretMode = INTERPRETABLE;
+                        vExpandContractMsg(i);
+                        omExpandedMapIndexes.push_back(nMapIndex);
+                    }
+                }
+            }
+        }
+    }
+
+    /* Cleared before the sort rather than after it: a message id arriving on
+    the receive thread meanwhile sets it again and is picked up next time round
+    instead of being dropped. */
+    m_bSortOrderStale = false;
+    vSortDisplayOrder();
+
+    if (IS_MODE_INTRP(m_bExprnFlag_Disp))
+    {
+        vCreateAllMsgTree();
+
+        //Expand the Messages which were previously in expanded state.
+        for (UINT i = 0; i < omExpandedMapIndexes.size(); i++)
+        {
+            const __int64 nMapIndex = omExpandedMapIndexes[i];
+            for (UINT j = 0; j < m_omMgsIndexVec.size(); j++)
+            {
+                if (nMapIndex == m_omMgsIndexVec[j])
+                {
+                    vExpandContractMsg(j);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/*******************************************************************************
   Function Name  : vSortMsgWndColumn
   Input(s)       : wParam contains Sort Field value, lParam contains Sort order.
   Output         : Returns 0 as LRESULT
-  Functionality  : Sorts the Buffers in PSDI_CAN DLL based on Sort field
-                   specified. Also, handles the reordering of m_omMgsIndexVec
-                   in case of INTERPRET mode.
+  Functionality  : Applies the sort the user asked for by clicking a column.
+
+                   The overwrite modes sort the row order, which leaves the
+                   receive buffer alone and so works while the bus is live.
+                   Append mode maps rows straight onto buffer positions, so it
+                   still has to reorder the buffer and is only offered while
+                   disconnected.
   Member of      : CMsgFrmtWnd
   Author(s)      : Arunkumar K
   Date Created   : 12-05-2010
@@ -1686,70 +1964,13 @@ LRESULT CMsgFrmtWnd::vSortMsgWndColumn(WPARAM wParam, LPARAM lParam)
         return S_FALSE;
     }
 
-
-    m_pouMsgContainerIntrf->DoSortBuffer(m_nField,m_bAscending);
-
-    m_pExpandedMapIndexes = (__int64*)malloc(sizeof(__int64) * m_omMgsIndexVec.size());
-    if( m_pExpandedMapIndexes == nullptr)
+    if (IS_MODE_APPEND(m_bExprnFlag_Disp))
     {
-        AfxMessageBox(_("Unable to Allocate Memory."));
-        return 0;
+        m_pouMsgContainerIntrf->DoSortBuffer(m_nField, m_bAscending);
     }
-
-    if (IS_MODE_INTRP(m_bExprnFlag_Disp))
+    else
     {
-        int nExpCnt = 0;
-        for(UINT i = 0; i < m_omMgsIndexVec.size(); i++)    //Collapse message entries which are expanded.
-        {
-            SMSGDISPMAPENTRY sTemp;
-            __int64 nMapIndex = m_omMgsIndexVec[i];
-            if (nMapIndex != nInvalidKey)
-            {
-                if (m_omMsgDispMap.Lookup(nMapIndex, sTemp))
-                {
-                    if (sTemp.m_eInterpretMode == INTERPRETING)
-                    {
-                        sTemp.m_eInterpretMode = INTERPRETABLE;
-                        vExpandContractMsg(i);
-                        m_pExpandedMapIndexes[nExpCnt++] = nMapIndex;
-                    }
-                }
-            }
-        }
-        //Sort the m_omMgsIndexVec Array
-        for(UINT i = 0; i < m_omMgsIndexVec.size(); i++)
-        {
-            __int64 nMapIndex;
-
-            if(nullptr != m_pouMsgContainerIntrf)
-            {
-                m_pouMsgContainerIntrf->GetMapIndexAtID(i, nMapIndex);
-                m_omMgsIndexVec[i] = nMapIndex;
-                SMSGDISPMAPENTRY sDispEntry;
-                if (m_omMsgDispMap.Lookup(nMapIndex, sDispEntry ))
-                {
-                    sDispEntry.m_nBufferIndex = i;
-                    m_omMsgDispMap.SetAt(nMapIndex, sDispEntry);
-                }
-            }
-        }
-        vCreateAllMsgTree();
-
-        //Expand the Messages which are previously in expandede state.
-        for(int i = 0; i<nExpCnt; i++)
-        {
-            __int64 nMapIndex;
-            nMapIndex = m_pExpandedMapIndexes[i];
-            for(UINT j =0; j < m_omMgsIndexVec.size(); j++)
-            {
-                if(nMapIndex == m_omMgsIndexVec[j])
-                {
-                    vExpandContractMsg(j);
-                    break;
-                }
-            }
-        }
-        free(m_pExpandedMapIndexes);
+        vApplyDisplayOrderSort();
     }
 
     m_lstMsg.Invalidate();
@@ -2077,6 +2298,10 @@ void CMsgFrmtWnd::onRxMsg(void* pMsg)
     m_pouMsgContainerIntrf->vSaveOWandGetDetails(pMsg, dwMapIndex, dwTimeStamp, nMsgCode, nBufIndex, eInterpreteMode);
 
     EnterCriticalSection(&m_ouCriticalSection);
+    /* m_omMgsIndexVec is read, and now also reordered, under
+    m_omCritSecForMapArr on the display side, so take that here too rather
+    than relying on the two sides happening not to overlap. */
+    EnterCriticalSection(&m_omCritSecForMapArr);
     if (m_omMsgDispMap.Lookup(dwMapIndex, sDispEntry))
     {
         //Time offset will be previous msg time stamp
@@ -2095,10 +2320,18 @@ void CMsgFrmtWnd::onRxMsg(void* pMsg)
         sDispEntry.m_nTimeStamp  = dwTimeStamp;
         //Update array list
         m_omMgsIndexVec.push_back(dwMapIndex);
+
+        /* A message id turning up for the first time lands at the end of the
+        row order. Flag it rather than sorting here: this runs on the receive
+        thread, and the display update puts it in its place soon enough. */
+        if ((m_nField != -1) && !IS_MODE_APPEND(m_bExprnFlag_Disp))
+        {
+            m_bSortOrderStale = true;
+        }
     }
-    //LeaveCriticalSection(&m_omCritSecForMapArr);
     //Update the map
     m_omMsgDispMap[dwMapIndex] = sDispEntry;
+    LeaveCriticalSection(&m_omCritSecForMapArr);
     LeaveCriticalSection(&m_ouCriticalSection);
 
 
@@ -2130,6 +2363,11 @@ void CMsgFrmtWnd::vUpdatePtrInLstCtrl()
 {
     SMSGWNDHDRCOL sHdrColStruct;
     m_MsgHdrInfo.vGetHdrColStruct(m_sHdrColStruct);
+    /* The overwrite modes sort the row order and leave the receive buffer
+    alone, so they can be sorted with the bus connected. Set here because the
+    display mode is changed both from the menu and straight from a loaded
+    configuration, and every one of those paths comes through here. */
+    m_lstMsg.vSetLiveSortAllowed(!IS_MODE_APPEND(m_bExprnFlag_Disp));
     if ( nullptr != m_pouMsgContainerIntrf )
     {
         //*************************************TBD the header details 4 diff. protocol

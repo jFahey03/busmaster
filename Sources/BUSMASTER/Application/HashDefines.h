@@ -324,6 +324,14 @@ typedef void (*TIMERFNPTR)();
 //CANoe Database Support
 #define CANOE_DATABASE_EXTN     "DBC"
 
+/* Filter offered wherever a database can be associated with a channel. Both
+the BUSMASTER format and CANdb++ files are accepted; a *.dbc is handed to the
+database manager as it is. */
+#define ASSOCIATE_DATABASE_FILTER                                       \
+    "Database File(s)(*.dbf; *.dbc)|*.dbf;*.dbc|"                       \
+    "BUSMASTER Database File(s)(*.dbf)|*.dbf|"                          \
+    "CANdb++ Database File(s)(*.dbc)|*.dbc||"
+
 //For OLD Version Compatiability
 #define CANVAS_DATABASE_HEADER         "//******************************CANvas Messages and signals Database Ver1.0******************************//"
 #define CANVAS_DATABASE_HEADER_NEW     "//******************************CANvas Messages and signals Database ******************************//"
@@ -710,6 +718,11 @@ Data byte value should be less than 256."
 
 const int TX_MESSAGE = 0x20000000;  // bitwise OR to make it a Tx message
 const int RX_MESSAGE = 0xdfffffff;  // bitwise AND to make it a Rx message
+
+/* A message window map index carries the direction and the frame format in
+the bits just above the identifier. Masking them off leaves the identifier, so
+a message sorts to one place whether it was transmitted or received. */
+#define defSORT_MSG_ID_MASK                  0x1FFFFFFFLL
 
 #define MAKE_RTR_MESSAGE_TYPE(MSGID)         (MSGID | 0x80000000)
 #define MAKE_EXTENDED_MESSAGE_TYPE(MSGID)    (MSGID | 0x40000000)

@@ -24,6 +24,7 @@
 
 /* Project includes */
 #include "ExportLogFileDlg.h"
+#include <locale.h>
 #include "LogToExcelConverter.h"
 
 #ifdef _MANAGED

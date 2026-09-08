@@ -431,6 +431,7 @@ copy ".\Res\Splsh16.bmp" "$(SolutionDir)\bin\$(OutDir)Splsh16.bmp"
       <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='busmaster_debug|Win32'">
       </BrowseInformation>
     </ClCompile>
+    <ClCompile Include="DbcDatabaseSupport.cpp" />
     <ClCompile Include="DisplayIntMsg.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -978,6 +979,7 @@ copy ".\Res\Splsh16.bmp" "$(SolutionDir)\bin\$(OutDir)Splsh16.bmp"
     <ClInclude Include="CSignalGeneration.h" />
     <ClInclude Include="DatabaseDissociateDlg.h" />
     <ClInclude Include="DataType.h" />
+    <ClInclude Include="DbcDatabaseSupport.h" />
     <ClInclude Include="DisplayIntMsg.h" />
     <ClInclude Include="DriverInfoDlg.h" />
     <ClInclude Include="ElementSelection.h" />

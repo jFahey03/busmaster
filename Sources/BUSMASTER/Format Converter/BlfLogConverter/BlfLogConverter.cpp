@@ -24,6 +24,7 @@
 
 /* Project includes */
 #include "BlfLogConverter.h"
+#include <locale.h>
 #include <fstream>
 #include <iomanip>
 

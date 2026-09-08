@@ -49,6 +49,7 @@
 #include "MsgBufferConfigPage.h"    // For Message Buffer Configuration PPage
 #include "MsgFilterConfigPage.h"    // For Filter configuration page
 #include "DatabaseDissociateDlg.h"
+#include "DbcDatabaseSupport.h"
 #include "AppServices_Impl.h"
 #include "include/utils_macro.h"
 #include "Include/BaseDefs.h"
@@ -1306,7 +1307,7 @@ void CMainFrame::OnImportDatabase()
                          "dbf",     // Default Extension,
                          nullptr,// Initial database file name.
                          OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT | OFN_ALLOWMULTISELECT,
-                         _("BUSMASTER Datatbase File(*.dbf)|*.dbf||"),
+                         _(ASSOCIATE_DATABASE_FILTER),
                          nullptr );
 
     // Set Title
@@ -1482,7 +1483,46 @@ DWORD CMainFrame::dLoadDataBaseFile(CString omStrActiveDataBase, bool /* bFrmCom
     }
 
     int channel = 0;
+    /* The file the user picked and the file the database manager ends up
+    reading are the same thing unless a *.dbc has to be converted below. */
+    const std::string strSourcePath = (LPCSTR)omStrActiveDataBase;
+    std::string strDbcError;
+
+    m_omDbcSourcePaths.erase( strSourcePath );
+
     ERRORCODE ecError = m_ouBusmasterNetwork->LoadDb( CAN, channel, omStrActiveDataBase.GetBuffer( 0 ) );
+
+    /* A database manager that does not recognise the format can still report
+    success and leave a cluster with nothing in it. If the channel is left
+    without a single frame the load achieved nothing, so treat it as a failure
+    and give the converter below its turn. */
+    if ( ( ecError == EC_SUCCESS ) && bIsDbcDatabaseFile( strSourcePath ) )
+    {
+        std::list<IFrame*> ouFrames;
+        m_ouBusmasterNetwork->GetFrameList( CAN, channel, ouFrames );
+        if ( ouFrames.empty() )
+        {
+            m_ouBusmasterNetwork->DeleteDBService( CAN, channel, strSourcePath );
+            ecError = EC_FAILURE;
+        }
+    }
+
+    /* The database manager parses *.dbc natively on the builds that support
+    it. Where it does not, fall back to the bundled converter and load the
+    shadow *.dbf it produces, keeping the *.dbc as the file of record. */
+    if ( ( ecError != EC_SUCCESS ) && bIsDbcDatabaseFile( strSourcePath ) )
+    {
+        std::string strShadowPath;
+        if ( bConvertDbcToShadowDbf( strSourcePath, strShadowPath, strDbcError ) )
+        {
+            ecError = m_ouBusmasterNetwork->LoadDb( CAN, channel, strShadowPath );
+            if ( ecError == EC_SUCCESS )
+            {
+                m_omDbcSourcePaths[strShadowPath] = strSourcePath;
+            }
+        }
+    }
+
     if ( ecError == EC_SUCCESS )
     {
         //Signal watch
@@ -1521,13 +1561,26 @@ DWORD CMainFrame::dLoadDataBaseFile(CString omStrActiveDataBase, bool /* bFrmCom
             theApp.m_pouMsgSignal->bAddDbNameEntry(omStrActiveDataBase);
         }
 
+        /* A *.dbc the converter could only partly read still loads; say so
+        rather than letting the skipped messages go unnoticed. */
+        if ( false == strDbcError.empty() )
+        {
+            static CString warnText;
+            warnText = omStrActiveDataBase + " : " + strDbcError.c_str();
+            theApp.bWriteIntoTraceWnd( warnText.GetBuffer( 0 ) );
+        }
+
         OnClusterChanged(CAN);
         dReturn = S_OK;
     }
     else
     {
         static CString errText; //TODO::FOR TRACE WINDOW
-        if ( ecError == ERR_INVALID_DATABASE )
+        if ( false == strDbcError.empty() )
+        {
+            errText = omStrActiveDataBase + " : " + strDbcError.c_str();
+        }
+        else if ( ecError == ERR_INVALID_DATABASE )
         {
             errText = omStrActiveDataBase + _( " is not created for CAN. Please load CAN related dbf file." );
         }
@@ -1546,6 +1599,23 @@ DWORD CMainFrame::dLoadDataBaseFile(CString omStrActiveDataBase, bool /* bFrmCom
         theApp.bWriteIntoTraceWnd( errText.GetBuffer( 0 ) );
     }
     return dReturn;
+}
+
+/******************************************************************************
+DESCRIPTION:    Returns the database file the user associated for a path the
+                database manager is holding. The two are the same file except
+                for a *.dbc that had to be converted to a shadow *.dbf.
+******************************************************************************/
+std::string CMainFrame::strGetAssociatedDbPath(const std::string& strLoadedPath) const
+{
+    std::map<std::string, std::string>::const_iterator itr =
+        m_omDbcSourcePaths.find( strLoadedPath );
+
+    if ( itr != m_omDbcSourcePaths.end() )
+    {
+        return itr->second;
+    }
+    return strLoadedPath;
 }
 
 void CMainFrame::vPopulateIDList( ETYPE_BUS  bus)
@@ -8688,7 +8758,7 @@ for (auto itrpCluster : pClusterList)
             itrpCluster->GetDBFilePath(strDBPath);
             if ((strDBPath != ""))
             {
-                omStrArrDBPaths.Add(strDBPath.c_str());
+                omStrArrDBPaths.Add(strGetAssociatedDbPath(strDBPath).c_str());
             }
         }
     }
@@ -9027,10 +9097,15 @@ void CMainFrame::OnDissociateDatabase()
     m_ouBusmasterNetwork->GetDBServiceList( CAN, 0, clusterList );
     std::string path;
     std::list<std::string> dbPathList;
+    /* The list shows the files the user associated, so a converted *.dbc is
+    listed under its own name rather than under its shadow *.dbf. */
+    std::map<std::string, std::string> omLoadedPathOfListed;
 for ( auto cluster : clusterList )
     {
         cluster->GetDBFilePath( path );
-        dbPathList.push_back( path );
+        std::string strListed = strGetAssociatedDbPath( path );
+        omLoadedPathOfListed[strListed] = path;
+        dbPathList.push_back( strListed );
     }
 
     CDatabaseDissociateDlg odDBDialog( dbPathList );
@@ -9039,7 +9114,16 @@ for ( auto cluster : clusterList )
         dbPathList = odDBDialog.GetDissociatedFiles();
 for ( auto dbPath : dbPathList )
         {
-            m_ouBusmasterNetwork->DeleteDBService( CAN, 0, dbPath );
+            std::string strLoadedPath = dbPath;
+            std::map<std::string, std::string>::const_iterator itrListed =
+                omLoadedPathOfListed.find( dbPath );
+            if ( itrListed != omLoadedPathOfListed.end() )
+            {
+                strLoadedPath = itrListed->second;
+            }
+
+            m_ouBusmasterNetwork->DeleteDBService( CAN, 0, strLoadedPath );
+            m_omDbcSourcePaths.erase( strLoadedPath );
         }
 
         ////////////////////////////////////////////////////////////
@@ -11126,7 +11210,7 @@ for (auto cluster : clusterList)
 for ( auto cluster : clusterList )
             {
                 cluster->GetDBFilePath( path );
-                temp = path.c_str();
+                temp = strGetAssociatedDbPath( path ).c_str();
                 CUtilFunctions::MakeRelativePath( omStrBasePath.c_str(), temp.GetBuffer(0), omStrRelativePath );
                 omDbNames.Add( omStrRelativePath.c_str() );
             }
@@ -13585,6 +13669,7 @@ void CMainFrame::vClearDbInfo(ETYPE_BUS eBus)
         {
             m_ouBusmasterNetwork->ReSetNetwork( CAN );
             m_ouBusmasterNetwork->SetChannelCount( CAN, 1 );
+            m_omDbcSourcePaths.clear();
             /*CFlags* pFlags = theApp.pouGetFlagsPtr();
             BOOL bDatabaseOpen = FALSE;
             if( pFlags != nullptr)

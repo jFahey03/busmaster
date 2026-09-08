@@ -1,0 +1,7 @@
+^C:\USERS\JACKF\ONEDRIVE\DOCUMENTS\GITHUB\BUSMASTER\SOURCES\BUSMASTER\FORMAT CONVERTER\LOGASCCONVERTER\LOG_ASC_LEXER.L
+..\..\..\..\Tools\flex\flex.exe -i -oLog_Asc_Lexer.c "C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\LogAscConverter\Log_Asc_Lexer.l"
+exit 0
+^C:\USERS\JACKF\ONEDRIVE\DOCUMENTS\GITHUB\BUSMASTER\SOURCES\BUSMASTER\FORMAT CONVERTER\LOGASCCONVERTER\LOG_ASC_PARSER.Y
+set BISON_SIMPLE=..\..\..\..\Tools\bison\bison.simple
+..\..\..\..\Tools\bison\bison.exe -d -l --output=Log_Asc_Parser.c "C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\LogAscConverter\Log_Asc_Parser.y"
+exit 0

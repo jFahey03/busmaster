@@ -136,7 +136,9 @@
     </Link>
     <PostBuildEvent>
       <Message>Performing registration</Message>
-      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer</Command>
+      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer
+if errorlevel 1 echo NOTE: BusEmulation COM registration was skipped; it needs an elevated build. Only external automation clients of BusEmulation.SimENG need it.
+exit 0</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -188,7 +190,9 @@
     </Link>
     <PostBuildEvent>
       <Message>Performing registration</Message>
-      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer</Command>
+      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer
+if errorlevel 1 echo NOTE: BusEmulation COM registration was skipped; it needs an elevated build. Only external automation clients of BusEmulation.SimENG need it.
+exit 0</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='busmaster_debug|Win32'">
@@ -239,7 +243,9 @@
     </Link>
     <PostBuildEvent>
       <Message>Performing Registration</Message>
-      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer</Command>
+      <Command>"$(SolutionDir)BIN/$(OutDir)BusEmulation.exe" /RegServer
+if errorlevel 1 echo NOTE: BusEmulation COM registration was skipped; it needs an elevated build. Only external automation clients of BusEmulation.SimENG need it.
+exit 0</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

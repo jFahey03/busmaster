@@ -928,13 +928,18 @@ void CMsgContainerCAN::SetClientID(DWORD dwClientID)
 }
 
 
+/* Sorts the append buffer, whose rows map straight onto buffer positions.
+
+The overwrite buffer is deliberately left alone. Its rows are addressed through
+the buffer index recorded per message when the message was first seen, so
+permuting the buffer would leave every overwrite row pointing at someone else's
+entry. The overwrite modes sort their row order instead, in
+CMsgFrmtWnd::vSortDisplayOrder, which is also what lets them be sorted while
+the bus is connected. */
 void CMsgContainerCAN::DoSortBuffer(int nField,bool bAscending)
 {
     CCANMsgWndDataHandler<STCANDATASPL>::SortBufferData ( nField, bAscending, mBmNetwork, m_ouAppendCanBuf.nGetBuffer (), m_ouAppendCanBuf.GetBufferLength () );
     m_ouAppendCanBuf.vDoSortIndexMapArray ();
-
-    CCANMsgWndDataHandler<STCANDATA>::SortBufferData ( nField, bAscending, mBmNetwork, m_ouOWCanBuf.nGetBuffer(), m_ouOWCanBuf.GetBufferLength() );
-    m_ouOWCanBuf.vDoSortIndexMapArray ();
 }
 
 void CMsgContainerCAN::GetMapIndexAtID(int nIndex,__int64& nMapIndex)
@@ -1017,6 +1022,7 @@ HRESULT CMsgContainerCAN::GetMessageDetails(__int64 nMapIndex, unsigned int& msg
     //Message Name
     GetMessageName(sCANMsg, msgName, formatHexForId);
 
+    return hResult;
 }
 COLORREF CMsgContainerCAN::getMessageColor(long long key, bool isAppendMode, CMessageAttrib* msgAttributes/*has to be removed*/)
 {

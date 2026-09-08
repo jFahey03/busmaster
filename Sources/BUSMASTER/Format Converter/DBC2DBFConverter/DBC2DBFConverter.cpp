@@ -2,6 +2,7 @@
 //
 
 #include "DBC2DBFConverter_stdafx.h"
+#include <locale.h>
 #include <afxdllx.h>
 #include "DBC2DBFConverter.h"
 #ifdef _MANAGED

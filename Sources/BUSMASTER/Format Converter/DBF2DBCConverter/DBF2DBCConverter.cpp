@@ -24,6 +24,7 @@
 
 /* Project includes */
 #include "Converter.h"
+#include <locale.h>
 #include "DBF2DBCConverter.h"
 #include "Definitions.h"
 

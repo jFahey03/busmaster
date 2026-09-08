@@ -1,0 +1,2 @@
+^C:\USERS\JACKF\ONEDRIVE\DOCUMENTS\GITHUB\BUSMASTER\SOURCES\BUSMASTER\FORMAT CONVERTER\CAPL2CCONVERTER\LEXER_RULE.L
+..\..\..\..\Tools\flex\flex.exe -i -oCAPL_C_Lexer.h "C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\CAPL2CConverter\lexer_rule.l"

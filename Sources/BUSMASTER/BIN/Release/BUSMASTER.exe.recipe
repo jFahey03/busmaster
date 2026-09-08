@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Filter\Release\Filter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\FrameProcessor\Release\FrameProcessor.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\NodeSimEx\Release\NodeSimEx.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\ProjectConfiguration\Release\ProjectConfiguration.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\UDS_Protocol\Release\UDS_Protocol.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\PSDI_CAN\Release\PSDI_CAN.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Replay\Release\Replay.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\EXTERNAL\DmGraph\ReleaseUMinSize\DMGraph.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\SigGrphWnd\Release\SigGrphWnd.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\SignalDefiner\Release\SignalDefiner.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\SignalWatch\Release\SignalWatch.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\TestSetupEditorGUI\Release\TestSetupEditorGUI.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\TestSuiteExecutorGUI\Release\TestSuiteExecutorGUI.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\TXWindow\Release\TXWindow.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Release\AdvancedUIPlugin.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\BusEmulation\Release\BusEmulation.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\BIN\Release\BUSMASTER.exe</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

@@ -16,6 +16,7 @@ set(sources
   ConfigMsgDispPropPg.cpp
   ConfigMsgLogDlg.cpp
   DatabaseDissociateDlg.cpp
+  DbcDatabaseSupport.cpp
   DisplayIntMsg.cpp
   DriverInfoDlg.cpp
   ElementSelection.cpp
@@ -106,6 +107,7 @@ set(headers
   CSignalGeneration.h
   DatabaseDissociateDlg.h
   DataType.h
+  DbcDatabaseSupport.h
   DisplayIntMsg.h
   DriverInfoDlg.h
   ElementSelection.h

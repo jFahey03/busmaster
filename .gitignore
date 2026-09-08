@@ -369,3 +369,6 @@ Tests/PMD/cpd.html
 Tests/PMD/cpd.xml
 Tests/PMD/cpd-fixed.xml
 Tests/Requirements Traceability Matrix/report.html
+
+# Build log written by Sources/build.bat
+Sources/build.log

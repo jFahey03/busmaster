@@ -47,6 +47,7 @@ Modifications   :   -
 CRxMsgList::CRxMsgList()
 {
     m_bConnected = FALSE;
+    m_bLiveSortAllowed = false;
     m_nSortedColumn = 1;
     m_pbSortableColumn = nullptr;
     m_pbAscendingOrder = nullptr;
@@ -1145,7 +1146,7 @@ void CRxMsgList::OnHdnItemclick(NMHDR* pNMHDR, LRESULT* pResult)
 {
     LPNMHEADER pLV = reinterpret_cast<LPNMHEADER>(pNMHDR);
 
-    if(!m_bConnected && pLV->iItem>0 && (this->GetItemCount()>0) && m_pbSortableColumn[pLV->iItem-1])
+    if((!m_bConnected || m_bLiveSortAllowed) && pLV->iItem>0 && (this->GetItemCount()>0) && m_pbSortableColumn[pLV->iItem-1])
     {
         m_wndHeader.SelectSortedColumn(pLV->iItem);
         m_wndHeader.SelectSortAscDesc(m_pbAscendingOrder[pLV->iItem-1]);
@@ -1176,6 +1177,21 @@ void CRxMsgList::OnHdnItemclick(NMHDR* pNMHDR, LRESULT* pResult)
 void CRxMsgList::SetConnectionStatus(bool bConnected)
 {
     m_bConnected = bConnected;
+}
+
+/*******************************************************************************
+  Function Name  : vSetLiveSortAllowed
+  Input(s)       : bAllowed
+  Output         : -
+  Functionality  : Says whether the current display mode can be sorted while
+                   the bus is connected. Overwrite modes can, because they sort
+                   the row order and leave the receive buffer untouched; append
+                   mode reorders the buffer itself and so cannot.
+  Member of      : CRxMsgList
+*******************************************************************************/
+void CRxMsgList::vSetLiveSortAllowed(bool bAllowed)
+{
+    m_bLiveSortAllowed = bAllowed;
 }
 
 

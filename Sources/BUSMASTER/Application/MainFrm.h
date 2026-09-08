@@ -124,6 +124,10 @@ public:
     CString m_omStrSourceFilePathName;
     // Holds database name for CAN
     CString m_omStrDatabaseName;
+    /* Shadow *.dbf produced from a *.dbc -> the *.dbc it came from. Only
+    populated when the database manager cannot read the *.dbc itself; it keeps
+    the file the user picked as the one shown and stored in the configuration. */
+    std::map<std::string, std::string> m_omDbcSourcePaths;
     // Holds database name for J1939
     CString m_omJ1939DBName;
     // Holds the timer delay in msec for the replay
@@ -308,6 +312,9 @@ public:
 
     // To set the associated database file names for logging
     void vSetAssociatedDatabaseFiles(ETYPE_BUS eBus);
+    /* Maps a path the database manager is holding back onto the file the user
+    associated. They differ only for a *.dbc that had to be converted. */
+    std::string strGetAssociatedDbPath(const std::string& strLoadedPath) const;
     // To set the baudrate for the selected channels
     void vSetBaudRateInfo(ETYPE_BUS eBus);
     //Wrapper function around the inline function,to be called from com function

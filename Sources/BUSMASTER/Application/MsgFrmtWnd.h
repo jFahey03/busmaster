@@ -202,7 +202,26 @@ protected:
     //kadoor CSigWatchDlg *m_podSignalWatchDlg;
     int m_nField;
     bool m_bAscending;
-    __int64* m_pExpandedMapIndexes;
+    /* Set when a message id shows up for the first time while a sort is
+    active. The row order is brought back into line on the next display
+    update rather than on the receive thread. */
+    bool m_bSortOrderStale;
+
+    /* The message window column a sort field refers to. Resolved against the
+    live header layout rather than fixed indices, so it survives the column
+    arrangement being changed. */
+    enum eMsgSortColumn
+    {
+        SORT_BY_NOTHING = 0,
+        SORT_BY_TIME,
+        SORT_BY_CHANNEL,
+        SORT_BY_ID,
+        SORT_BY_NAME
+    };
+
+    eMsgSortColumn eGetSortColumn(int nField) const;
+    void vSortDisplayOrder();
+    void vApplyDisplayOrderSort();
 
     WINDOWPLACEMENT m_sMsgIntrpWndPlacement;
     bool mBusConnectedState;

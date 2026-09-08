@@ -1,4 +1,5 @@
 #include "CAPL2CConverter_stdafx.h"
+#include <locale.h>
 #include "CAPL2CConverter.h"
 #include "CAPL2CConverter_Definitions.h"
 //#include "Converter.h"

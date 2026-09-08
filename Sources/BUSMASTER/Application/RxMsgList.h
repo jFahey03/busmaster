@@ -101,6 +101,10 @@ private:
         void ClearArrowDirection();
     };
     bool m_bConnected;
+    /* Overwrite modes sort the row order rather than the receive buffer, so
+    they can be sorted while frames are still arriving. Append mode still has
+    to reorder the buffer itself and stays disconnected-only. */
+    bool m_bLiveSortAllowed;
 
 public:
     // Member data
@@ -127,6 +131,7 @@ protected:
 public:
     afx_msg void OnHdnItemclick(NMHDR* pNMHDR, LRESULT* pResult);
     void SetConnectionStatus(bool bConnected);
+    void vSetLiveSortAllowed(bool bAllowed);
     afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
     afx_msg void OnImportLogFile();
     afx_msg void OnShowToolbar();

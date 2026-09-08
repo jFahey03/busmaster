@@ -3,6 +3,7 @@
 
 
 #include "FormatConverterWnd.h"
+#include <locale.h>
 #include "DefConverterPage.h"
 #include <HtmlHelp.h>
 // CFormatConverterWnd

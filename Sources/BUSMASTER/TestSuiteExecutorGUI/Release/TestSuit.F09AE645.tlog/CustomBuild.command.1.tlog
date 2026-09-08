@@ -1,0 +1,6 @@
+^C:\USERS\JACKF\ONEDRIVE\DOCUMENTS\GITHUB\BUSMASTER\SOURCES\BUSMASTER\TESTSUITEEXECUTORGUI\LEXER.L
+..\..\..\Tools\flex\flex.exe -i -L -olexer.c "C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\TestSuiteExecutorGUI\lexer.l"
+^C:\USERS\JACKF\ONEDRIVE\DOCUMENTS\GITHUB\BUSMASTER\SOURCES\BUSMASTER\TESTSUITEEXECUTORGUI\PARSER.Y
+set BISON_SIMPLE=..\..\..\Tools\bison\bison.simple
+..\..\..\Tools\bison\bison.exe -d -l --output=parser.c "C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\TestSuiteExecutorGUI\parser.y"
+exit 0

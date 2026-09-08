@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\AscLogConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\DBC2DBFConverterLibrary.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\CAPL2CConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\DBC2DBFConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\DBF2DBCConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\J1939DBC2DBFConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\LogAscConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\Release\LogToExcelConverter.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jackf\OneDrive\Documents\GitHub\busmaster\Sources\BUSMASTER\Format Converter\bin\Release\FormatConverter.exe</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

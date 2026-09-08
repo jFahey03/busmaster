@@ -48,6 +48,9 @@
     <ClCompile Include="DatabaseDissociateDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DbcDatabaseSupport.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DisplayIntMsg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -320,6 +323,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DataType.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DbcDatabaseSupport.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DisplayIntMsg.h">
