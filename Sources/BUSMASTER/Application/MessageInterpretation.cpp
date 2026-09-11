@@ -63,6 +63,8 @@ CMessageInterpretation::CMessageInterpretation(CWnd* pParent /*=nullptr*/)
 
     m_hBrushStatic = CreateSolidBrush(RGB(30, 60, 150));
     m_hWndParent = nullptr;
+    // Nothing saved until the window is first hidden; see OnShowWindow.
+    memset(&m_sWinCurrStatus, 0, sizeof(m_sWinCurrStatus));
 }
 
 /******************************************************************************
@@ -98,7 +100,7 @@ BEGIN_MESSAGE_MAP(CMessageInterpretation, CDialog)
     ON_WM_CLOSE()
     ON_WM_CREATE()
     //}}AFX_MSG_MAP
-    ON_WM_MOVE()
+    ON_WM_EXITSIZEMOVE()
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -127,7 +129,6 @@ void CMessageInterpretation::OnSize(UINT nType, int cx, int cy)
     {
         vResizeControls();
     }
-    ::PostMessage(m_hWndParent, WM_UPDATE_MSG_INTRP_WND_PLC, 0, 0);
 }
 /******************************************************************************
  Function Name  :   OnCtlColor
@@ -261,8 +262,13 @@ void CMessageInterpretation::OnShowWindow(BOOL bShow, UINT nStatus)
 
     if (bShow == TRUE)
     {
-        // Set the window position
-        SetWindowPlacement(&m_sWinCurrStatus);
+        /* Put the window back where it was when last hidden, as when the main
+        window is minimised and restored. A window never hidden yet has
+        nothing saved and keeps the position it was opened at. */
+        if (m_sWinCurrStatus.length == sizeof(WINDOWPLACEMENT))
+        {
+            SetWindowPlacement(&m_sWinCurrStatus);
+        }
         // Call NC paint to update title bar
         SendMessage(WM_NCPAINT, 1, 0);
         // Update Client Area
@@ -294,6 +300,7 @@ BOOL CMessageInterpretation::OnInitDialog()
 {
     CDialog::OnInitDialog();
 
+    GetWindowText(m_omStrBaseTitle);
     SetIcon( AfxGetApp()->LoadIcon(IDI_ICON_MSGWND), TRUE);
 
     // TODO: Add extra initialization here
@@ -365,8 +372,9 @@ void CMessageInterpretation::vSetCaption(CString strCaption)
  Input(s)       :   -
  Output         :   -
  Functionality  :   This function will be called by framework when dialog is
-                    closed. The dialog is put in hidden state instead of
-                    closing it.
+                    closed. The dialog hides at once and tells the message
+                    window, which owns it and destroys it. Several can be open,
+                    so the notification says which one it is.
  Member of      :   CMessageInterpretation
 
  Author(s)      :   Ratnadip Choudhury
@@ -375,9 +383,8 @@ void CMessageInterpretation::vSetCaption(CString strCaption)
 ******************************************************************************/
 void CMessageInterpretation::OnClose()
 {
-    // TODO: Add your message handler code here and/or call default
     this->ShowWindow(SW_HIDE);
-    ::PostMessage(m_hWndParent, WM_UPDATE_MSG_INTRP_WND_PLC, 0, 0);
+    ::PostMessage(m_hWndParent, WM_MSG_INTRP_WND_CLOSED, (WPARAM)m_hWnd, 0);
     //CDialog::OnClose();
 }
 /******************************************************************************
@@ -437,6 +444,17 @@ void CMessageInterpretation::vUpdateMessageData(UINT unMsgID,
     {
         bCLearFlag = TRUE;
         m_ctrlSignal.DeleteAllItems();
+
+        /* With several windows open, cascaded over one another, the title
+        is what tells them apart. */
+        if (omStrMsgName.IsEmpty())
+        {
+            SetWindowText(m_omStrBaseTitle);
+        }
+        else
+        {
+            SetWindowText(omStrMsgName + " - " + m_omStrBaseTitle);
+        }
     }
 
     // Get the size to avoid function call in the loop
@@ -682,19 +700,18 @@ void CMessageInterpretation::vClearWindowContent()
 }
 
 /*******************************************************************************
- Function Name    : OnMove
- Input(s)         : int x, int y
+ Function Name    : OnExitSizeMove
+ Input(s)         : -
  Output           :
- Functionality    : Updates the Parent window with window placement.
+ Functionality    : Called once the user has finished moving or resizing the
+                    window. Tells the parent window, which opens the next
+                    interpretation window in the same place. Moves made in code,
+                    such as stepping a new window clear of the others, do not
+                    come through here and so are not remembered.
  Member of        : CMessageInterpretation
- Friend of        :   -
- Author(s)        : Raja N
- Date Created     : 06.04.2004
- Modified by      :
- Modification     :
 *******************************************************************************/
-void CMessageInterpretation::OnMove(int x, int y)
+void CMessageInterpretation::OnExitSizeMove()
 {
-    CDialog::OnMove(x, y);
-    ::PostMessage(m_hWndParent, WM_UPDATE_MSG_INTRP_WND_PLC, 0, 0);
+    CDialog::OnExitSizeMove();
+    ::PostMessage(m_hWndParent, WM_UPDATE_MSG_INTRP_WND_PLC, (WPARAM)m_hWnd, 0);
 }

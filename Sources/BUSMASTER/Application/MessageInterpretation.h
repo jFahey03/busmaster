@@ -44,6 +44,9 @@ class CMessageInterpretation : public CDialog
 {
     HBRUSH m_hBrushStatic;
     HWND m_hWndParent;
+    /* The caption from the dialog template. The message shown is put in
+    front of it, so with several windows open each can be told apart. */
+    CString m_omStrBaseTitle;
 
     void vResizeControls(void);
 public:
@@ -106,6 +109,6 @@ protected:
     //}}AFX_MSG
     DECLARE_MESSAGE_MAP()
 public:
-    afx_msg void OnMove(int x, int y);
+    afx_msg void OnExitSizeMove();
     CString m_strCaption;
 };

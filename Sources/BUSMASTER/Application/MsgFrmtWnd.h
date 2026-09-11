@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "RxMsgList.h"
+#include <map>
 #include <set>
 #include "include/BaseDefs.h"
 //#include "PSDIHandler.h"
@@ -140,7 +141,6 @@ private:
     void vSetDefaultConfigValues();
     char* m_pomDataPtrArr[MAX_MSG_WND_COL_CNT];
     int m_nIndex;
-    void vShowUpdateMsgIntrpDlg(__int64 nMapIndex);
     void vUpdateMsgTreeWnd(__int64 nMapIndex);
     void vUpdateAllTreeWnd();
     void vSetDefaultPlacement();
@@ -148,9 +148,22 @@ private:
     void UnloadFile(bool bFileUnload);
     void ShowImportLogToolbar(BOOL bShow);
     void OnImportLogSetTotalPages(int pageNumber);
-    UINT m_unCurrInterpretedMsgID;
-    __int64 m_unCurrInterpretedMapIndex;
-    CMessageInterpretation* m_podMsgIntprtnDlg;
+
+    /* The interpretation windows that are open, one per message entry, keyed
+    by the entry's map index. Double clicking an entry that already has one
+    brings it forward rather than opening a second. */
+    typedef std::map<__int64, CMessageInterpretation*> MsgIntrpDlgMap;
+    MsgIntrpDlgMap m_omMsgIntrpDlgMap;
+
+    void vOpenMsgIntrpDlg(__int64 nMapIndex);
+    void vFillMsgIntrpDlg(CMessageInterpretation* pomDlg, __int64 nMapIndex,
+                          const SSignalInfoArray& omSigInfoArray);
+    void vUpdateAllMsgIntrpDlgs();
+    void vPlaceNewMsgIntrpDlg(CMessageInterpretation* pomDlg);
+    bool bIsMsgIntrpDlgNear(const CPoint& omTopLeft, int nTolerance) const;
+    MsgIntrpDlgMap::iterator itrFindMsgIntrpDlg(HWND hDlgWnd);
+    void vDestroyMsgIntrpDlg(CMessageInterpretation* pomDlg);
+    void vCloseAllMsgIntrpDlgs();
     //CProgressBarDlg m_odProgressCtrlDlg;
     INT m_anMsgBuffSize[defDISPLAY_CONFIG_PARAM];
     void vUpdateMsgBufferDetails(INT* pMsgBuffSize);
@@ -259,6 +272,7 @@ public:
     afx_msg LRESULT vOnGetNextPrevMsgIndex(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnListCtrlMsgDblClick(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnUpdateMsgIntrpWndPlcmnt(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnMsgIntrpWndClosed(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnUpdateMsgTreeItemsPositions(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnClearAll(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnShowHideMessageWindow(WPARAM wParam, LPARAM lParam);

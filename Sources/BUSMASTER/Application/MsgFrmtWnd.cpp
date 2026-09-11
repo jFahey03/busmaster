@@ -169,8 +169,9 @@ CMsgFrmtWnd::CMsgFrmtWnd(ETYPE_BUS eBusType, CMsgContainerBase* msgContainer, HW
         m_pomDataPtrArr[i] = nullptr;
     }
     m_nIndex = 0;
-    m_unCurrInterpretedMsgID = static_cast < UINT > (-1);
-    m_podMsgIntprtnDlg = nullptr;
+    /* Filled in from the configuration. Left empty, the first interpretation
+    window opens where it is created rather than at a garbage position. */
+    memset(&m_sMsgIntrpWndPlacement, 0, sizeof(m_sMsgIntrpWndPlacement));
 
 
     // Append Buffer Size
@@ -190,11 +191,7 @@ CMsgFrmtWnd::~CMsgFrmtWnd()
     DeleteCriticalSection(&m_omCritSecClearAll);
     DeleteCriticalSection(&m_CritSec1);
     DeleteCriticalSection(&m_ouCriticalSection);
-    if(m_podMsgIntprtnDlg)
-    {
-        delete m_podMsgIntprtnDlg;
-        m_podMsgIntprtnDlg = nullptr;
-    }
+    vCloseAllMsgIntrpDlgs();
     m_bIsLogFileImported = false;
 }
 
@@ -226,6 +223,7 @@ BEGIN_MESSAGE_MAP(CMsgFrmtWnd, CWnd)
     ON_MESSAGE(WM_GET_NEXT_PREV_MSG_INDEX, vOnGetNextPrevMsgIndex)
     ON_MESSAGE(WM_LSTC_DBLCLK, OnListCtrlMsgDblClick)
     ON_MESSAGE(WM_UPDATE_MSG_INTRP_WND_PLC, OnUpdateMsgIntrpWndPlcmnt)
+    ON_MESSAGE(WM_MSG_INTRP_WND_CLOSED, OnMsgIntrpWndClosed)
     ON_MESSAGE(WM_UPDATE_TREE_ITEMS_POS, OnUpdateMsgTreeItemsPositions)
     ON_WM_PARENTNOTIFY()
     ON_WM_CLOSE()
@@ -328,12 +326,6 @@ int CMsgFrmtWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
     {
         AfxMessageBox(_("Not able to create the list control."));
     }
-
-    m_podMsgIntprtnDlg = new CMessageInterpretation(this);
-    m_podMsgIntprtnDlg->vCreateMsgIntrprtnDlg(this, FALSE);
-
-
-    m_podMsgIntprtnDlg->vSetCaption(GetProtocolStringName().c_str());
 
     m_objToolTip.Create(this);
     m_objToolTip.Activate(TRUE);
@@ -716,12 +708,8 @@ void CMsgFrmtWnd::OnEditClearAll()
     }
     m_lstMsg.DeleteAllItems();
     m_lstMsg.Invalidate();
-    if (m_podMsgIntprtnDlg->IsWindowVisible())
-    {
-        m_podMsgIntprtnDlg->vClearWindowContent();
-        m_podMsgIntprtnDlg->DestroyWindow();
-        m_podMsgIntprtnDlg->vCreateMsgIntrprtnDlg(this, FALSE);
-    }
+    //The entries the interpretation windows were showing are gone.
+    vCloseAllMsgIntrpDlgs();
 }
 
 void CMsgFrmtWnd::UnloadFile(bool bFileUnload)
@@ -864,21 +852,6 @@ void CMsgFrmtWnd::OnParentNotify(UINT message, LPARAM lParam)
             if (nFlag == LVHT_ONITEMICON && IS_MODE_INTRP(m_bExprnFlag_Disp))
             {
                 vExpandContractMsg( nIndex );
-            }
-            if(m_podMsgIntprtnDlg->IsWindowVisible())
-            {
-                if( IS_MODE_APPEND(m_bExprnFlag_Disp) )
-                {
-                    ::PostMessage(this->m_hWnd, WM_LSTC_DBLCLK, nIndex, 0);
-                }
-                else
-                {
-                    __int64 nMapIndex = m_omMgsIndexVec[nIndex];
-                    if (nMapIndex != nInvalidKey)
-                    {
-                        ::PostMessage(this->m_hWnd, WM_LSTC_DBLCLK, nIndex, 0);
-                    }
-                }
             }
         }
     }
@@ -1212,36 +1185,8 @@ void CMsgFrmtWnd::OnTimer(UINT nIDEvent)
                 m_lstMsg.EnsureVisible( nBuffMsgCnt-1, TRUE);
             }
 
-            //Update Message Interpretation Window.
-            if( m_podMsgIntprtnDlg->IsWindowVisible() )
-            {
-                unsigned int msgId;
-                CString strName = "";
-                m_nIndex = nBuffMsgCnt-1;
-                SSignalInfoArray SigInfoArray;
-                vGetSignalInfoArray(m_unCurrInterpretedMapIndex, SigInfoArray);
-                bool bHex = IS_NUM_DEC_SET(m_bExprnFlag_Disp);
-                m_pouMsgContainerIntrf->GetMessageDetails(m_unCurrInterpretedMapIndex, msgId, strName, bHex);
-
-
-                int nCnt = SigInfoArray.GetSize();
-                SSignalInfo sTempSignal;
-                CStringArray arrSignals;
-                CStringArray arrSigRawValues;
-                CStringArray arrSigPhyValues;
-                CStringArray arrSigUnits;
-                for (int i = 0; i < nCnt; i++)
-                {
-                    sTempSignal = SigInfoArray.GetAt(i);
-                    arrSignals.Add(sTempSignal.m_omSigName);
-                    arrSigRawValues.Add(sTempSignal.m_omRawValue);
-                    arrSigPhyValues.Add(sTempSignal.m_omEnggValue);
-                    arrSigUnits.Add(sTempSignal.m_omUnit);
-                }
-                m_podMsgIntprtnDlg->vUpdateMessageData(m_unCurrInterpretedMsgID
-                                                       ,strName,arrSignals,arrSigRawValues,arrSigPhyValues,
-                                                       arrSigUnits, IS_NUM_HEX_SET(m_bExprnFlag_Disp));
-            }
+            //Update the open Message Interpretation windows.
+            vUpdateAllMsgIntrpDlgs();
 
             //Update Signal Tree items.
             EnterCriticalSection(&m_CritSec1);
@@ -1387,19 +1332,51 @@ void CMsgFrmtWnd::vUpdateMsgBufferDetails(INT* pMsgBuffSize)
 
 /*******************************************************************************
   Function Name  : OnUpdateMsgIntrpWndPlcmnt
-  Input(s)       : wParam, lParam
+  Input(s)       : wParam - the interpretation window the user moved or resized
+                   lParam - unused
   Output         : Returns 0 as LRESULT
   Functionality  : CMsgFrmtWnd
                    Handler for message event WM_UPDATE_MSG_INTRP_WND_PLC.
-                   Updates the Message Interpretation window placement details.
+                   Remembers that window's placement. The next interpretation
+                   window opens there, and it is what the configuration saves.
   Member of      : CMsgFrmtWnd
   Author(s)      : Arunkumar K
   Date Created   : 06-09-2010
   Modifications  :
 *******************************************************************************/
-LRESULT CMsgFrmtWnd::OnUpdateMsgIntrpWndPlcmnt(WPARAM /*wParam*/, LPARAM /*lParam*/)
+LRESULT CMsgFrmtWnd::OnUpdateMsgIntrpWndPlcmnt(WPARAM wParam, LPARAM /*lParam*/)
 {
-    m_podMsgIntprtnDlg->GetWindowPlacement(&m_sMsgIntrpWndPlacement);
+    MsgIntrpDlgMap::iterator itr = itrFindMsgIntrpDlg((HWND)wParam);
+    if (itr != m_omMsgIntrpDlgMap.end())
+    {
+        m_sMsgIntrpWndPlacement.length = sizeof(WINDOWPLACEMENT);
+        itr->second->GetWindowPlacement(&m_sMsgIntrpWndPlacement);
+    }
+    return 0;
+}
+
+/*******************************************************************************
+  Function Name  : OnMsgIntrpWndClosed
+  Input(s)       : wParam - the interpretation window the user closed
+                   lParam - unused
+  Output         : Returns 0 as LRESULT
+  Functionality  : Handler for message event WM_MSG_INTRP_WND_CLOSED. The window
+                   hid itself when it was closed; this destroys it and forgets
+                   it, so double clicking its message opens a new one.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+LRESULT CMsgFrmtWnd::OnMsgIntrpWndClosed(WPARAM wParam, LPARAM /*lParam*/)
+{
+    MsgIntrpDlgMap::iterator itr = itrFindMsgIntrpDlg((HWND)wParam);
+
+    /* Not found when the window went with all the others, in a clear for
+    instance, before this notification arrived. */
+    if (itr != m_omMsgIntrpDlgMap.end())
+    {
+        CMessageInterpretation* pomDlg = itr->second;
+        m_omMsgIntrpDlgMap.erase(itr);
+        vDestroyMsgIntrpDlg(pomDlg);
+    }
     return 0;
 }
 
@@ -1409,7 +1386,8 @@ LRESULT CMsgFrmtWnd::OnUpdateMsgIntrpWndPlcmnt(WPARAM /*wParam*/, LPARAM /*lPara
   Output         : Returns 0 as LRESULT
   Functionality  : CMsgFrmtWnd
                    Handler for message event WM_LSTC_DBLCLK.
-                   Shows the Message Interpretation window on Message double click.
+                   Opens a Message Interpretation window for the double
+                   clicked message, or brings forward the one already open.
   Member of      : CMsgFrmtWnd
   Author(s)      : Arunkumar K
   Date Created   : 06-08-2010
@@ -1445,7 +1423,7 @@ LRESULT CMsgFrmtWnd::OnListCtrlMsgDblClick(WPARAM wParam, LPARAM lParam)
         WORD wEventMsgType = LOWORD(nMsgCode);
         INT nMsgId = HIBYTE(wDirId);
         int nEventType = LOBYTE(wEventMsgType);
-        vShowUpdateMsgIntrpDlg(nMapIndex);
+        vOpenMsgIntrpDlg(nMapIndex);
     }
 
     return 0;
@@ -1457,26 +1435,42 @@ LRESULT CMsgFrmtWnd::OnListCtrlMsgDblClick(WPARAM wParam, LPARAM lParam)
 
 
 /*******************************************************************************
-  Function Name  : vShowUpdateMsgIntrpDlg
-  Input(s)       : nMapIndex
-  Output         : Returns 0 as LRESULT
-  Functionality  : Updates the Color of a particular message based on index.
+  Function Name  : vOpenMsgIntrpDlg
+  Input(s)       : nMapIndex - message entry whose signals are wanted
+  Output         : -
+  Functionality  : Shows the signals of a message entry in an interpretation
+                   window of its own, leaving the windows already open for
+                   other entries as they are. An entry that already has a
+                   window gets that one brought forward instead of a second.
   Member of      : CMsgFrmtWnd
-  Author(s)      : Arunkumar K
-  Date Created   : 12-05-2010
-  Modifications  :
 *******************************************************************************/
-void CMsgFrmtWnd::vShowUpdateMsgIntrpDlg(__int64 nMapIndex)
+void CMsgFrmtWnd::vOpenMsgIntrpDlg(__int64 nMapIndex)
 {
-    //int nMsgCode = nMapIndex & 0xFFFF;
-    //nMsgCode = nGetCodefromMapKey(nMapIndex);
+    //Rows under an expanded message hold its signal tree, not a message.
+    if (nInvalidKey == nMapIndex)
+    {
+        return;
+    }
 
-    unsigned int nMsgCode = 0;
+    MsgIntrpDlgMap::iterator itr = m_omMsgIntrpDlgMap.find(nMapIndex);
+    if (itr != m_omMsgIntrpDlgMap.end())
+    {
+        CMessageInterpretation* pomOpenDlg = itr->second;
+        if (pomOpenDlg->IsWindowVisible())
+        {
+            if (pomOpenDlg->IsIconic())
+            {
+                pomOpenDlg->ShowWindow(SW_RESTORE);
+            }
+            pomOpenDlg->BringWindowToTop();
+            return;
+        }
 
-    //Message Name
-    CString strName;
-    bool isHex = IS_NUM_DEC_SET(m_bExprnFlag_Disp);
-    m_pouMsgContainerIntrf->GetMessageDetails(nMapIndex, nMsgCode, strName, isHex);
+        /* A hidden window has been closed and its notification is still on
+        the way. Finish closing it now and open a fresh one. */
+        m_omMsgIntrpDlgMap.erase(itr);
+        vDestroyMsgIntrpDlg(pomOpenDlg);
+    }
 
     //Signal List
     SSignalInfoArray SigInfoArray;
@@ -1485,38 +1479,234 @@ void CMsgFrmtWnd::vShowUpdateMsgIntrpDlg(__int64 nMapIndex)
         return;
     }
 
+    CMessageInterpretation* pomDlg = new CMessageInterpretation(this);
+    pomDlg->vCreateMsgIntrprtnDlg(this, FALSE);
+    if (FALSE == ::IsWindow(pomDlg->GetSafeHwnd()))
+    {
+        delete pomDlg;
+        return;
+    }
 
-    int nCnt = SigInfoArray.GetSize();
-    SSignalInfo sTempSignal;
+    /* Placed before it joins the map, so it does not count as a window
+    already sitting where it is about to go. */
+    vPlaceNewMsgIntrpDlg(pomDlg);
+    m_omMsgIntrpDlgMap[nMapIndex] = pomDlg;
+
+    //Filling the window with the signals shows it.
+    vFillMsgIntrpDlg(pomDlg, nMapIndex, SigInfoArray);
+
+    // Send NC paint Message
+    pomDlg->SendMessage(WM_NCPAINT, 1, 0);
+    // Repaint the client area
+    pomDlg->Invalidate();
+}
+
+/*******************************************************************************
+  Function Name  : vFillMsgIntrpDlg
+  Input(s)       : pomDlg - interpretation window to fill
+                   nMapIndex - message entry the window shows
+                   omSigInfoArray - that entry's signals, already interpreted
+  Output         : -
+  Functionality  : Puts the message name, id and signal values in the window.
+                   The window shows itself if it is not already showing.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vFillMsgIntrpDlg(CMessageInterpretation* pomDlg, __int64 nMapIndex,
+                                   const SSignalInfoArray& omSigInfoArray)
+{
+    unsigned int nMsgCode = 0;
+
+    //Message Name
+    CString strName;
+    m_pouMsgContainerIntrf->GetMessageDetails(nMapIndex, nMsgCode, strName,
+            IS_NUM_DEC_SET(m_bExprnFlag_Disp) != 0);
+
+    int nCnt = omSigInfoArray.GetSize();
     CStringArray arrSignals;
     CStringArray arrSigRawValues;
     CStringArray arrSigPhyValues;
     CStringArray arrSigUnits;
     for (int i = 0; i < nCnt; i++)
     {
-        sTempSignal = SigInfoArray.GetAt(i);
+        const SSignalInfo& sTempSignal = omSigInfoArray.GetAt(i);
         arrSignals.Add(sTempSignal.m_omSigName);
         arrSigRawValues.Add(sTempSignal.m_omRawValue);
         arrSigPhyValues.Add(sTempSignal.m_omEnggValue);
         arrSigUnits.Add(sTempSignal.m_omUnit);
     }
 
-    m_unCurrInterpretedMsgID = nMsgCode;
-    m_unCurrInterpretedMapIndex = nMapIndex;
-    if(!m_podMsgIntprtnDlg->IsWindowVisible())
-    {
-        m_podMsgIntprtnDlg->vClearWindowContent();
-        m_podMsgIntprtnDlg->DestroyWindow();
-        m_podMsgIntprtnDlg->vCreateMsgIntrprtnDlg(this, FALSE);
-    }
-    m_podMsgIntprtnDlg->SetWindowPlacement(&m_sMsgIntrpWndPlacement);
-    m_podMsgIntprtnDlg->vUpdateMessageData(nMsgCode,strName,arrSignals,arrSigRawValues,arrSigPhyValues,
-                                           arrSigUnits, IS_NUM_HEX_SET(m_bExprnFlag_Disp));
+    pomDlg->vUpdateMessageData(nMsgCode, strName, arrSignals, arrSigRawValues,
+                               arrSigPhyValues, arrSigUnits,
+                               IS_NUM_HEX_SET(m_bExprnFlag_Disp));
+}
 
-    // Send NC paint Message
-    m_podMsgIntprtnDlg->SendMessage(WM_NCPAINT, 1, 0);
-    // Repaint the client area
-    m_podMsgIntprtnDlg->Invalidate();
+/*******************************************************************************
+  Function Name  : vUpdateAllMsgIntrpDlgs
+  Input(s)       : -
+  Output         : -
+  Functionality  : Refreshes every open interpretation window with the latest
+                   instance of its message.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vUpdateAllMsgIntrpDlgs()
+{
+    for (MsgIntrpDlgMap::iterator itr = m_omMsgIntrpDlgMap.begin();
+            itr != m_omMsgIntrpDlgMap.end(); ++itr)
+    {
+        /* A hidden window has either been closed and is waiting to be
+        destroyed, or is hidden along with a minimised main window. Neither
+        has anything on screen to refresh. */
+        if (itr->second->IsWindowVisible())
+        {
+            SSignalInfoArray SigInfoArray;
+            vGetSignalInfoArray(itr->first, SigInfoArray);
+            vFillMsgIntrpDlg(itr->second, itr->first, SigInfoArray);
+        }
+    }
+}
+
+/*******************************************************************************
+  Function Name  : vPlaceNewMsgIntrpDlg
+  Input(s)       : pomDlg - interpretation window that has just been created
+  Output         : -
+  Functionality  : Positions a new interpretation window before it is shown.
+                   It goes where the user last left one, stepped a title bar at
+                   a time past any window already open at that spot, so it
+                   never lands squarely on top of another and the title of
+                   each stays readable. The steps go down and to the right
+                   where the screen has room, and up or to the left where it
+                   does not.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vPlaceNewMsgIntrpDlg(CMessageInterpretation* pomDlg)
+{
+    /* Nothing remembered yet leaves it where it was created. Either way it
+    stays hidden here and is shown once it has content. */
+    if (FALSE == ::IsRectEmpty(&m_sMsgIntrpWndPlacement.rcNormalPosition))
+    {
+        WINDOWPLACEMENT sPlacement = m_sMsgIntrpWndPlacement;
+        sPlacement.length  = sizeof(WINDOWPLACEMENT);
+        sPlacement.flags   = 0;
+        sPlacement.showCmd = SW_HIDE;
+        sPlacement.ptMinPosition.x = sPlacement.ptMinPosition.y = -1;
+        sPlacement.ptMaxPosition.x = sPlacement.ptMaxPosition.y = -1;
+        pomDlg->SetWindowPlacement(&sPlacement);
+    }
+
+    CRect omBaseRect;
+    pomDlg->GetWindowRect(&omBaseRect);
+
+    CRect omWorkArea(omBaseRect);
+    MONITORINFO sMonitorInfo;
+    sMonitorInfo.cbSize = sizeof(MONITORINFO);
+    if (::GetMonitorInfo(::MonitorFromRect(&omBaseRect, MONITOR_DEFAULTTONEAREST), &sMonitorInfo))
+    {
+        omWorkArea = sMonitorInfo.rcWork;
+    }
+
+    const int nStep = GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYSIZEFRAME);
+    //Past this many steps the screen is full enough that overlapping is fine.
+    const int nMaxSteps = 20;
+
+    CPoint omTopLeft = omBaseRect.TopLeft();
+    for (int nSteps = 1;
+            (nSteps <= nMaxSteps) && bIsMsgIntrpDlgNear(omTopLeft, nStep / 2);
+            nSteps++)
+    {
+        int nOffsetX = nSteps * nStep;
+        int nOffsetY = nSteps * nStep;
+        if (omBaseRect.right + nOffsetX > omWorkArea.right)
+        {
+            nOffsetX = -nOffsetX;
+        }
+        if (omBaseRect.bottom + nOffsetY > omWorkArea.bottom)
+        {
+            nOffsetY = -nOffsetY;
+        }
+        omTopLeft = CPoint(omBaseRect.left + nOffsetX, omBaseRect.top + nOffsetY);
+    }
+
+    if (omTopLeft != omBaseRect.TopLeft())
+    {
+        pomDlg->SetWindowPos(nullptr, omTopLeft.x, omTopLeft.y, 0, 0,
+                             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+/*******************************************************************************
+  Function Name  : bIsMsgIntrpDlgNear
+  Input(s)       : omTopLeft - screen position to test
+                   nTolerance - how close in each direction counts as there
+  Output         : true if an open interpretation window has its top left
+                   corner at omTopLeft, give or take nTolerance
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+bool CMsgFrmtWnd::bIsMsgIntrpDlgNear(const CPoint& omTopLeft, int nTolerance) const
+{
+    for (MsgIntrpDlgMap::const_iterator itr = m_omMsgIntrpDlgMap.begin();
+            itr != m_omMsgIntrpDlgMap.end(); ++itr)
+    {
+        CRect omRect;
+        itr->second->GetWindowRect(&omRect);
+        if ((abs(omRect.left - omTopLeft.x) < nTolerance) &&
+                (abs(omRect.top - omTopLeft.y) < nTolerance))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*******************************************************************************
+  Function Name  : itrFindMsgIntrpDlg
+  Input(s)       : hDlgWnd - window handle of an interpretation window
+  Output         : Its entry in m_omMsgIntrpDlgMap, or end() if it is not open
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+CMsgFrmtWnd::MsgIntrpDlgMap::iterator CMsgFrmtWnd::itrFindMsgIntrpDlg(HWND hDlgWnd)
+{
+    MsgIntrpDlgMap::iterator itr = m_omMsgIntrpDlgMap.begin();
+    while ((itr != m_omMsgIntrpDlgMap.end()) && (itr->second->GetSafeHwnd() != hDlgWnd))
+    {
+        ++itr;
+    }
+    return itr;
+}
+
+/*******************************************************************************
+  Function Name  : vDestroyMsgIntrpDlg
+  Input(s)       : pomDlg - interpretation window, already out of the map
+  Output         : -
+  Functionality  : Destroys the window and frees it.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vDestroyMsgIntrpDlg(CMessageInterpretation* pomDlg)
+{
+    /* The window itself is already gone if the main window was destroyed
+    first, as happens on exit. */
+    if (::IsWindow(pomDlg->GetSafeHwnd()))
+    {
+        pomDlg->DestroyWindow();
+    }
+    delete pomDlg;
+}
+
+/*******************************************************************************
+  Function Name  : vCloseAllMsgIntrpDlgs
+  Input(s)       : -
+  Output         : -
+  Functionality  : Closes every open interpretation window.
+  Member of      : CMsgFrmtWnd
+*******************************************************************************/
+void CMsgFrmtWnd::vCloseAllMsgIntrpDlgs()
+{
+    MsgIntrpDlgMap omDlgMap;
+    omDlgMap.swap(m_omMsgIntrpDlgMap);
+
+    for (MsgIntrpDlgMap::iterator itr = omDlgMap.begin(); itr != omDlgMap.end(); ++itr)
+    {
+        vDestroyMsgIntrpDlg(itr->second);
+    }
 }
 
 
@@ -2334,16 +2524,6 @@ void CMsgFrmtWnd::onRxMsg(void* pMsg)
     LeaveCriticalSection(&m_omCritSecForMapArr);
     LeaveCriticalSection(&m_ouCriticalSection);
 
-
-    if( IS_MODE_APPEND(m_bExprnFlag_Disp) )
-    {
-        if( m_unCurrInterpretedMsgID == nMsgCode &&
-                m_unCurrInterpretedMapIndex == dwMapIndex)
-        {
-            m_nIndex = m_lstMsg.GetItemCount();
-        }
-    }
-
     m_bUpdate = TRUE;
 }
 
@@ -2442,13 +2622,7 @@ LRESULT CMsgFrmtWnd::ModifyMsgWndProperty(WPARAM wParam, LPARAM lParam)
             bToUpdate = TRUE;
         }
         vUpdateAllTreeWnd();
-        if(m_podMsgIntprtnDlg != NULL)
-        {
-            if(m_podMsgIntprtnDlg->IsWindowVisible())
-            {
-                vShowUpdateMsgIntrpDlg(m_unCurrInterpretedMapIndex);
-            }
-        }
+        vUpdateAllMsgIntrpDlgs();
     }
 
     if (byModes & TIME_MODE)
@@ -3915,8 +4089,8 @@ bool CMsgFrmtWnd::GetConfigData(xmlNodePtr pxmlNodePtr)
     xmlNodePtr pNodeInterpretationWndPos = xmlNewNode(nullptr, BAD_CAST DEF_INTPRET_WND_POS);
     xmlAddChild(pxmlNodePtr, pNodeInterpretationWndPos);
 
-    m_podMsgIntprtnDlg->GetWindowPlacement(&m_sMsgIntrpWndPlacement);
-
+    /* Kept up to date as the user moves and resizes interpretation windows,
+    so it holds whether or not any are open right now. */
     xmlUtils::CreateXMLNodeFrmWindowsPlacement(pNodeInterpretationWndPos, m_sMsgIntrpWndPlacement);
 
     return TRUE;
